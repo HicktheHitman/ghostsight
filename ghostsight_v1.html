@@ -762,10 +762,23 @@ function loadCommunitySkins(){
   xhr.send();
 }
 
-async function loadVoteCountsFromDB(){
-  try {
-    const {data:voteCounts, error} = await db.from("votes").select("skin_id, vote_type");
-    if(!error && voteCounts && voteCounts.length > 0){
+function loadVoteCountsFromDB(){
+  // Use XHR with anon key — fetch all votes (anon key can read if RLS allows, or table is public)
+  // Falls back gracefully if RLS blocks
+  const xhr = new XMLHttpRequest();
+  xhr.open("GET", SUPABASE_URL + "/rest/v1/votes?select=skin_id,vote_type", true);
+  xhr.setRequestHeader("apikey", SUPABASE_ANON);
+  xhr.setRequestHeader("Authorization", "Bearer " + SUPABASE_ANON);
+  xhr.setRequestHeader("Accept", "application/json");
+  xhr.onload = function(){
+    if(xhr.status !== 200) {
+      console.warn("loadVoteCountsFromDB failed:", xhr.status, xhr.responseText.slice(0,200));
+      // If RLS blocks aggregate read, at least show user's own vote count from profile
+      return;
+    }
+    try {
+      const voteCounts = JSON.parse(xhr.responseText);
+      if(!voteCounts || voteCounts.length === 0) return;
       const counts = {};
       voteCounts.forEach(v => {
         if(!counts[v.skin_id]) counts[v.skin_id] = {i:0,v:0};
@@ -782,11 +795,11 @@ async function loadVoteCountsFromDB(){
       });
       totalVoteCount = voteCounts.length;
       document.getElementById("sv-votes").textContent = voteCounts.length.toLocaleString();
-      // Re-render with updated scores
       let list = [...SKINS_DATA];
       renderSkinList(list);
-    }
-  } catch(e) { /* silent fail — local scores still show */ }
+    } catch(e){ console.warn("loadVoteCountsFromDB parse error:", e); }
+  };
+  xhr.send();
 }
 
 async function renderLB(){
@@ -796,7 +809,7 @@ async function renderLB(){
   document.getElementById("sv-skins").textContent = SKINS_DATA.length;
   document.getElementById("sv-p2w").textContent = SKINS_DATA.filter(s=>s.status==="p2w").length;
   document.getElementById("sv-safe").textContent = SKINS_DATA.filter(s=>s.status==="safe").length;
-  document.getElementById("sv-votes").textContent = "0";
+  // sv-votes maintained by loadVoteCountsFromDB — preserve current value
 
   if(curFilter==="p2w") list=list.filter(s=>s.status==="p2w");
   else if(curFilter==="safe") list=list.filter(s=>s.status==="safe");
@@ -815,7 +828,7 @@ function renderSkinList(list){
 
   document.getElementById("skin-list").innerHTML = list.map((sk,i)=>{
     const col = scoreColor(sk.score);
-    const voted = userVotes[sk.id];
+    const voted = userVotes[sk.id]; // userVotes populated by loadUserVotes() on login
     const top = i<3 && curFilter==="all";
     const im = img(sk.id);
     return `<div class="skin-row">
