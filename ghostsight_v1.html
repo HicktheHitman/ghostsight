@@ -1360,19 +1360,18 @@ function showView(v){
 // Helper to get auth token from localStorage
 function getAuthToken(){
   try{
-    const keys = Object.keys(localStorage);
-    // Try Supabase v2 pattern first: sb-{ref}-auth-token
-    const v2key = keys.find(k=>k.match(/sb-[a-z]+-auth-token/));
-    if(v2key){
-      const raw = JSON.parse(localStorage.getItem(v2key));
-      const t = raw?.access_token || raw?.session?.access_token || "";
-      if(t) return t;
+    // Exact Supabase v2 key format: sb-{project-ref}-auth-token
+    const raw = localStorage.getItem("sb-ofxlpxwzeirctngnlgxa-auth-token");
+    if(raw){
+      const parsed = JSON.parse(raw);
+      if(parsed?.access_token) return parsed.access_token;
     }
-    // Fallback patterns
-    const fallback = keys.find(k=>k.includes("auth-token")||k.includes("supabase.auth"));
-    if(fallback){
-      const raw = JSON.parse(localStorage.getItem(fallback));
-      return raw?.access_token || raw?.session?.access_token || "";
+    // Fallback - search all keys
+    const keys = Object.keys(localStorage);
+    const key = keys.find(k=>k.includes("auth-token"));
+    if(key){
+      const parsed = JSON.parse(localStorage.getItem(key));
+      return parsed?.access_token || "";
     }
   }catch(e){}
   return "";
