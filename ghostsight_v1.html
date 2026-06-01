@@ -1007,7 +1007,7 @@ function previewImg(input){
   reader.readAsDataURL(file);
 }
 
-async function submitSkin(){
+function submitSkin(){
   if(!curUser){ openAuth("login"); return; }
   const name = document.getElementById("sub-name").value.trim();
   const note = document.getElementById("sub-note").value.trim();
@@ -1015,40 +1015,74 @@ async function submitSkin(){
   const btn = document.getElementById("sub-btn");
   btn.disabled=true; btn.textContent="Submitting...";
 
-  let imageUrl = null;
+  // Get auth token
+  const sbKey = Object.keys(localStorage).find(k=>k.startsWith("sb-")&&k.includes("auth-token"));
+  let token = "";
+  if(sbKey){try{const s=JSON.parse(localStorage.getItem(sbKey));token=s?.access_token||s?.session?.access_token||"";}catch(e){}}
+
+  function doSubmit(imageUrl){
+    const body = {
+      submitted_by: curUser.id,
+      name: name,
+      operator: document.getElementById("sub-op").value.trim(),
+      game: document.getElementById("sub-game").value.trim(),
+      price: document.getElementById("sub-price").value.trim(),
+      status_suggestion: document.getElementById("sub-status").value,
+      note: note,
+      image_url: imageUrl || null
+    };
+    const xhr = new XMLHttpRequest();
+    xhr.open("POST","https://ofxlpxwzeirctngnlgxa.supabase.co/rest/v1/submissions",true);
+    xhr.setRequestHeader("Content-Type","application/json");
+    xhr.setRequestHeader("apikey","eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Im9meGxweHd6ZWlyY3RuZ25sZ3hhIiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODAyODUyNjksImV4cCI6MjA5NTg2MTI2OX0.lKtZlyVjYxngFhhiJlMsLdXpKkm3292AE8ee0inidUI");
+    xhr.setRequestHeader("Authorization","Bearer "+token);
+    xhr.setRequestHeader("Prefer","return=minimal");
+    xhr.onload=function(){
+      btn.disabled=false; btn.textContent="Submit for review";
+      if(xhr.status>=200&&xhr.status<300){
+        showToast("Submitted! We'll review it shortly.");
+        document.getElementById("sub-name").value="";
+        document.getElementById("sub-op").value="";
+        document.getElementById("sub-game").value="";
+        document.getElementById("sub-price").value="";
+        document.getElementById("sub-note").value="";
+        document.getElementById("sub-image").value="";
+        document.getElementById("img-preview").classList.remove("show");
+      } else {
+        showToast("Submission failed: "+xhr.responseText,"error");
+      }
+    };
+    xhr.onerror=function(){ btn.disabled=false; btn.textContent="Submit for review"; showToast("Network error","error"); };
+    xhr.send(JSON.stringify(body));
+  }
+
+  // Try image upload - if it fails just submit without image
   const file = document.getElementById("sub-image").files[0];
   if(file){
     const ext = file.name.split(".").pop();
-    const path = `submissions/${curUser.id}-${Date.now()}.${ext}`;
-    const {error:upErr} = await db.storage.from("skin-images").upload(path, file);
-    if(!upErr){
-      const {data} = db.storage.from("skin-images").getPublicUrl(path);
-      imageUrl = data.publicUrl;
-    }
+    const path = "submissions/"+curUser.id+"-"+Date.now()+"."+ext;
+    const xhr2 = new XMLHttpRequest();
+    xhr2.open("POST","https://ofxlpxwzeirctngnlgxa.supabase.co/storage/v1/object/skin-images/"+path,true);
+    xhr2.setRequestHeader("apikey","eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Im9meGxweHd6ZWlyY3RuZ25sZ3hhIiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODAyODUyNjksImV4cCI6MjA5NTg2MTI2OX0.lKtZlyVjYxngFhhiJlMsLdXpKkm3292AE8ee0inidUI");
+    xhr2.setRequestHeader("Authorization","Bearer "+token);
+    xhr2.setRequestHeader("Content-Type",file.type||"image/webp");
+    xhr2.onload=function(){
+      if(xhr2.status>=200&&xhr2.status<300){
+        const publicUrl = "https://ofxlpxwzeirctngnlgxa.supabase.co/storage/v1/object/public/skin-images/"+path;
+        doSubmit(publicUrl);
+      } else {
+        // Image upload failed - submit without image
+        console.log("Image upload failed, submitting without image");
+        doSubmit(null);
+      }
+    };
+    xhr2.onerror=function(){ doSubmit(null); };
+    xhr2.send(file);
+  } else {
+    doSubmit(null);
   }
-
-  const {error} = await db.from("submissions").insert({
-    submitted_by: curUser.id,
-    name,
-    operator: document.getElementById("sub-op").value.trim(),
-    game: document.getElementById("sub-game").value.trim(),
-    price: document.getElementById("sub-price").value.trim(),
-    status_suggestion: document.getElementById("sub-status").value,
-    note,
-    image_url: imageUrl,
-  });
-
-  btn.disabled=false; btn.textContent="Submit for review";
-  if(error){ showToast("Submission failed: "+error.message,"error"); return; }
-  showToast("Submitted! We'll review it shortly.");
-  document.getElementById("sub-name").value="";
-  document.getElementById("sub-op").value="";
-  document.getElementById("sub-game").value="";
-  document.getElementById("sub-price").value="";
-  document.getElementById("sub-note").value="";
-  document.getElementById("sub-image").value="";
-  document.getElementById("img-preview").classList.remove("show");
 }
+
 
 // PROFILE
 async function renderProfile(){
