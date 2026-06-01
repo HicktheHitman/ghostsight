@@ -844,10 +844,19 @@ async function castVote(id, type, btn){
   userVotes[id] = type;
   let voteError = null;
   try {
-    const {error} = await db.from("votes").insert({user_id:curUser.id, skin_id:id, vote_type:type});
+    const payload = {user_id:curUser.id, skin_id:id, vote_type:type};
+    console.log("Inserting vote:", payload);
+    const {error} = await db.from("votes").insert(payload);
+    if(error) console.error("Insert error:", error);
     voteError = error;
   } catch(e) { voteError = e; }
-  if(voteError){ delete userVotes[id]; showToast("Vote failed","error"); return; }
+  if(voteError){ 
+    delete userVotes[id]; 
+    const msg = voteError?.message || voteError?.details || JSON.stringify(voteError) || "unknown error";
+    showToast("Vote failed: " + msg.slice(0,80), "error"); 
+    console.error("Vote error:", voteError);
+    return; 
+  }
   if(type==="invisible") localScores[id] = Math.min(99, localScores[id]+2);
   else localScores[id] = Math.max(1, localScores[id]-2);
   btn.classList.add("voted");
