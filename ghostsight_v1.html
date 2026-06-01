@@ -640,15 +640,9 @@ function saveUsername(){
   xhr.setRequestHeader("apikey","eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Im9meGxweHd6ZWlyY3RuZ25sZ3hhIiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODAyODUyNjksImV4cCI6MjA5NTg2MTI2OX0.lKtZlyVjYxngFhhiJlMsLdXpKkm3292AE8ee0inidUI");
   xhr.setRequestHeader("Prefer","return=minimal");
   
-  // Get auth token from localStorage
-  const sbKey = Object.keys(localStorage).find(k=>k.startsWith("sb-")&&k.includes("auth-token"));
-  if(sbKey){
-    try{
-      const session = JSON.parse(localStorage.getItem(sbKey));
-      const token = session?.access_token || session?.session?.access_token;
-      if(token) xhr.setRequestHeader("Authorization","Bearer "+token);
-    }catch(e){}
-  }
+  // Get auth token
+  const _token = getAuthToken();
+  if(_token) xhr.setRequestHeader("Authorization","Bearer "+_token);
   
   xhr.onload = function(){
     btn.disabled=false;
@@ -757,6 +751,14 @@ function loadCommunitySkins(){
         let list = [...SKINS_DATA];
         list.forEach(s=>s.score=localScores[s.id]);
         renderSkinList(list);
+        // Add new skins to tier list unranked pool
+        SKINS_DATA.forEach(s=>{
+          if(!unranked.includes(s.id) && !Object.values(tierState).flat().includes(s.id)){
+            unranked.push(s.id);
+          }
+        });
+        // Re-render tier list if it's active
+        if(document.getElementById("view-tier").classList.contains("active")) renderTier();
       }
     }catch(e){}
   };
@@ -1063,9 +1065,7 @@ function submitSkin(){
   btn.disabled=true; btn.textContent="Submitting...";
 
   // Get auth token
-  const sbKey = Object.keys(localStorage).find(k=>k.startsWith("sb-")&&k.includes("auth-token"));
-  let token = "";
-  if(sbKey){try{const s=JSON.parse(localStorage.getItem(sbKey));token=s?.access_token||s?.session?.access_token||"";}catch(e){}}
+  const token = getAuthToken();
 
   function doSubmit(imageUrl){
     const body = {
@@ -1215,9 +1215,7 @@ function loadAdminQueue(){
     return; 
   }
   
-  const sbKey = Object.keys(localStorage).find(k=>k.startsWith("sb-")&&k.includes("auth-token"));
-  let token = "";
-  if(sbKey){try{const s=JSON.parse(localStorage.getItem(sbKey));token=s?.access_token||s?.session?.access_token||"";}catch(e){}}
+  const token = getAuthToken();
   
   const xhr = new XMLHttpRequest();
   xhr.open("GET", "https://ofxlpxwzeirctngnlgxa.supabase.co/rest/v1/submissions?select=*&order=created_at.desc", true);
@@ -1309,9 +1307,7 @@ async function rejectSubmission(id){
 }
 
 function reviewSubmission(id, status, name, op, game, price, skinStatus, note, imageUrl){
-  const sbKey = Object.keys(localStorage).find(k=>k.startsWith("sb-")&&k.includes("auth-token"));
-  let token = "";
-  if(sbKey){try{const s=JSON.parse(localStorage.getItem(sbKey));token=s?.access_token||s?.session?.access_token||"";}catch(e){}}
+  const token = getAuthToken();
 
   // Step 1: Update submission status
   const xhr = new XMLHttpRequest();
@@ -1359,6 +1355,27 @@ function showView(v){
   if(v==="tier") renderTier();
   if(v==="profile") renderProfile();
   if(v==="admin") loadAdminQueue();
+}
+
+// Helper to get auth token from localStorage
+function getAuthToken(){
+  try{
+    const keys = Object.keys(localStorage);
+    // Try Supabase v2 pattern first: sb-{ref}-auth-token
+    const v2key = keys.find(k=>k.match(/sb-[a-z]+-auth-token/));
+    if(v2key){
+      const raw = JSON.parse(localStorage.getItem(v2key));
+      const t = raw?.access_token || raw?.session?.access_token || "";
+      if(t) return t;
+    }
+    // Fallback patterns
+    const fallback = keys.find(k=>k.includes("auth-token")||k.includes("supabase.auth"));
+    if(fallback){
+      const raw = JSON.parse(localStorage.getItem(fallback));
+      return raw?.access_token || raw?.session?.access_token || "";
+    }
+  }catch(e){}
+  return "";
 }
 
 // INIT
