@@ -482,9 +482,15 @@ let swipePairs = [], swipeIdx = 0, sessionVotes = 0;
 let tierState = {s:[],a:[],b:[],c:[],d:[]};
 let unranked = SKINS_DATA.map(s=>s.id);
 let localScores = {};
+let totalVoteCount = 0; // cached vote count — never reset by renderLB
 SKINS_DATA.forEach(s => localScores[s.id] = s.score);
 
-function img(id){ return IMG[id] || ""; }
+function img(id){
+  // Try base64 cache first (for pre-loaded skins), then Supabase Storage
+  if(IMG[id]) return IMG[id];
+  // Build Supabase Storage URL: skin-images/skins/{id}.webp or .jpg
+  return SUPABASE_URL + "/storage/v1/object/public/skin-images/skins/" + encodeURIComponent(id) + ".webp";
+}
 function scoreColor(s){ return s>=75?"var(--red)":s>=40?"var(--amber)":"var(--green)"; }
 function badge(st){
   if(st==="p2w") return '<span class="p2w-badge">P2W</span>';
@@ -690,7 +696,7 @@ function renderLBSync(){
   let list = [...SKINS_DATA];
   list.forEach(s => s.score = localScores[s.id]);
 
-  document.getElementById("sv-votes").textContent = "0";
+  // sv-votes is maintained by loadVoteCountsFromDB — don't reset it here
   document.getElementById("sv-skins").textContent = SKINS_DATA.length;
   document.getElementById("sv-p2w").textContent = SKINS_DATA.filter(s=>s.status==="p2w").length;
   document.getElementById("sv-safe").textContent = SKINS_DATA.filter(s=>s.status==="safe").length;
@@ -774,6 +780,7 @@ async function loadVoteCountsFromDB(){
           localScores[s.id] = s.score;
         }
       });
+      totalVoteCount = voteCounts.length;
       document.getElementById("sv-votes").textContent = voteCounts.length.toLocaleString();
       // Re-render with updated scores
       let list = [...SKINS_DATA];
@@ -847,7 +854,12 @@ async function castVote(id, type, btn){
   const sib = btn.parentElement.querySelector(".vote-btn:not(.voted)");
   if(sib) sib.style.opacity="0.35";
   showToast(type==="invisible"?"Flagged as hard to see":"Marked as clearly visible");
+  // Increment counter immediately, then refresh from DB
+  totalVoteCount++;
+  document.getElementById("sv-votes").textContent = totalVoteCount.toLocaleString();
   renderLB();
+  // Async refresh vote counts in background
+  loadVoteCountsFromDB();
 }
 
 function setFilter(f,el){
