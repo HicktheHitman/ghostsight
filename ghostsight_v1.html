@@ -518,32 +518,34 @@ db.auth.onAuthStateChange(async (event, session) => {
   if(curUser) {
     await loadUserVotes();
     renderLB();
-    // Load display name from DB and update header
-    const sbKey = Object.keys(localStorage).find(k=>k.startsWith("sb-")&&k.includes("auth-token"));
-    let token = "";
-    if(sbKey){try{const s=JSON.parse(localStorage.getItem(sbKey));token=s?.access_token||s?.session?.access_token||"";}catch(e){}}
-    const xhr = new XMLHttpRequest();
-    xhr.open("GET","https://ofxlpxwzeirctngnlgxa.supabase.co/rest/v1/profiles?id=eq."+curUser.id+"&select=display_name,role",true);
-    xhr.setRequestHeader("apikey","eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Im9meGxweHd6ZWlyY3RuZ25sZ3hhIiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODAyODUyNjksImV4cCI6MjA5NTg2MTI2OX0.lKtZlyVjYxngFhhiJlMsLdXpKkm3292AE8ee0inidUI");
-    xhr.setRequestHeader("Authorization","Bearer "+token);
-    xhr.onload=function(){
-      if(xhr.status===200){
-        try{
-          const data=JSON.parse(xhr.responseText);
-          if(data[0]?.display_name){
-            const dn=data[0].display_name;
-            document.getElementById("user-name").textContent=dn.split(" ")[0];
-            document.getElementById("user-initials").textContent=dn.charAt(0).toUpperCase();
-          }
-          if(data[0]?.role==="admin"){
-            isAdmin=true;
-            const btn=document.getElementById("admin-nav-btn");
-            if(btn) btn.style.display="block";
-          }
-        }catch(e){}
-      }
-    };
-    xhr.send();
+    // Load display name from DB - delay to ensure token is in localStorage
+    setTimeout(function(){
+      const _uid = curUser.id;
+      const _tok = getAuthToken();
+      if(!_tok) return;
+      const xhr = new XMLHttpRequest();
+      xhr.open("GET","https://ofxlpxwzeirctngnlgxa.supabase.co/rest/v1/profiles?id=eq."+_uid+"&select=display_name,role",true);
+      xhr.setRequestHeader("apikey","eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Im9meGxweHd6ZWlyY3RuZ25sZ3hhIiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODAyODUyNjksImV4cCI6MjA5NTg2MTI2OX0.lKtZlyVjYxngFhhiJlMsLdXpKkm3292AE8ee0inidUI");
+      xhr.setRequestHeader("Authorization","Bearer "+_tok);
+      xhr.onload=function(){
+        if(xhr.status===200){
+          try{
+            const data=JSON.parse(xhr.responseText);
+            if(data[0]?.display_name){
+              const dn=data[0].display_name;
+              document.getElementById("user-name").textContent=dn.split(" ")[0];
+              document.getElementById("user-initials").textContent=dn.charAt(0).toUpperCase();
+            }
+            if(data[0]?.role==="admin"){
+              isAdmin=true;
+              const btn=document.getElementById("admin-nav-btn");
+              if(btn) btn.style.display="block";
+            }
+          }catch(e){}
+        }
+      };
+      xhr.send();
+    }, 500);
     if(document.getElementById("view-profile").classList.contains("active")) renderProfile();
   }
 });
