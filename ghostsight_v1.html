@@ -712,8 +712,55 @@ function renderLBSync(){
 
   renderSkinList(list);
 
-  // Then update with DB data in background
+  // Load community skins from DB and vote counts in background
+  loadCommunitySkins();
   loadVoteCountsFromDB();
+}
+
+function loadCommunitySkins(){
+  const xhr = new XMLHttpRequest();
+  xhr.open("GET","https://ofxlpxwzeirctngnlgxa.supabase.co/rest/v1/skins?approved=eq.true&select=*",true);
+  xhr.setRequestHeader("apikey","eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Im9meGxweHd6ZWlyY3RuZ25sZ3hhIiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODAyODUyNjksImV4cCI6MjA5NTg2MTI2OX0.lKtZlyVjYxngFhhiJlMsLdXpKkm3292AE8ee0inidUI");
+  xhr.setRequestHeader("Accept","application/json");
+  xhr.onload=function(){
+    if(xhr.status!==200) return;
+    try{
+      const dbSkins = JSON.parse(xhr.responseText);
+      if(!dbSkins||dbSkins.length===0) return;
+      // Add new skins not already in SKINS_DATA
+      let added = 0;
+      dbSkins.forEach(s=>{
+        if(!SKINS_DATA.find(existing=>existing.id===s.id)){
+          SKINS_DATA.push({
+            id: s.id,
+            name: s.name,
+            op: s.operator||"Community",
+            game: s.game||"CoD",
+            era: s.era||"community",
+            price: s.price||"—",
+            score: s.score||45,
+            votes: 0,
+            status: s.status||"warn",
+            note: s.note||"",
+            image: s.image_url||null,
+            isNew: true
+          });
+          localScores[s.id] = s.score||45;
+          added++;
+        }
+      });
+      if(added>0){
+        // Re-render with new skins included
+        document.getElementById("sv-skins").textContent = SKINS_DATA.length;
+        document.getElementById("sv-p2w").textContent = SKINS_DATA.filter(s=>s.status==="p2w").length;
+        document.getElementById("sv-safe").textContent = SKINS_DATA.filter(s=>s.status==="safe").length;
+        let list = [...SKINS_DATA];
+        list.forEach(s=>s.score=localScores[s.id]);
+        renderSkinList(list);
+      }
+    }catch(e){}
+  };
+  xhr.send();
 }
 
 async function loadVoteCountsFromDB(){
@@ -773,7 +820,7 @@ function renderSkinList(list){
     const im = img(sk.id);
     return `<div class="skin-row">
       <div class="rank${top?" top":""}">${i+1}</div>
-      ${im?`<img class="skin-thumb" src="${im}" alt="${sk.name}">`:`<div class="skin-thumb"></div>`}
+      ${im?`<img class="skin-thumb" src="${im}" alt="${sk.name}">`:(sk.image?`<img class="skin-thumb" src="${sk.image}" alt="${sk.name}">`:`<div class="skin-thumb"></div>`)}
       <div>
         <div class="skin-name-text">${sk.name}</div>
         <div class="skin-meta">${sk.op} · ${sk.game} · ${sk.price}</div>
@@ -844,7 +891,7 @@ function renderPair(){
   document.getElementById("sw-cards").innerHTML = pair.map((sk,i)=>{
     const im = img(sk.id);
     return `<div class="swipe-card" onclick="pickSwipe('${sk.id}',${i})">
-      ${im?`<img class="swipe-img" src="${im}" alt="${sk.name}">`:`<div class="swipe-img"></div>`}
+      ${im?`<img class="swipe-img" src="${im}" alt="${sk.name}">`:(sk.image?`<img class="swipe-img" src="${sk.image}" alt="${sk.name}">`:`<div class="swipe-img"></div>`)}
       <div class="swipe-name">${sk.name}</div>
       <div class="swipe-sub">${sk.op} · ${sk.game}</div>
     </div>`;
