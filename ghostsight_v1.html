@@ -841,20 +841,29 @@ async function castVote(id, type, btn){
   if(!curUser){ openAuth("login"); return; }
   if(userVotes[id]){ showToast("Already voted on this skin","error"); return; }
   userVotes[id] = type;
-  let voteError = null;
-  try {
-    const {error} = await db.from("votes").insert({user_id:curUser.id, skin_id:id, vote_type:type});
-    voteError = error;
-  } catch(e) { voteError = e; }
-  if(voteError){ delete userVotes[id]; showToast("Vote failed","error"); return; }
-  if(type==="invisible") localScores[id] = Math.min(99, localScores[id]+2);
-  else localScores[id] = Math.max(1, localScores[id]-2);
+  if(type==="invisible") localScores[id]=Math.min(99,localScores[id]+2);
+  else localScores[id]=Math.max(1,localScores[id]-2);
   btn.classList.add("voted");
-  const sib = btn.parentElement.querySelector(".vote-btn:not(.voted)");
+  const sib=btn.parentElement.querySelector(".vote-btn:not(.voted)");
   if(sib) sib.style.opacity="0.35";
   showToast(type==="invisible"?"Flagged as hard to see":"Marked as clearly visible");
-  renderLB();
+  const xhr=new XMLHttpRequest();
+  xhr.open("POST","https://ofxlpxwzeirctngnlgxa.supabase.co/rest/v1/votes",true);
+  xhr.setRequestHeader("Content-Type","application/json");
+  xhr.setRequestHeader("apikey","eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Im9meGxweHd6ZWlyY3RuZ25sZ3hhIiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODAyODUyNjksImV4cCI6MjA5NTg2MTI2OX0.lKtZlyVjYxngFhhiJlMsLdXpKkm3292AE8ee0inidUI");
+  xhr.setRequestHeader("Authorization","Bearer "+getAuthToken());
+  xhr.setRequestHeader("Prefer","return=minimal");
+  xhr.onload=function(){
+    if(xhr.status>=200&&xhr.status<300){
+      loadVoteCountsFromDB();
+    } else {
+      delete userVotes[id];
+      showToast("Vote failed","error");
+    }
+  };
+  xhr.send(JSON.stringify({user_id:curUser.id,skin_id:id,vote_type:type}));
 }
+
 
 function setFilter(f,el){
   curFilter=f;
