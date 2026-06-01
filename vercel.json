@@ -1,0 +1,5 @@
+{
+  "rewrites": [
+    { "source": "/(.*)", "destination": "/ghostsight_v1.html" }
+  ]
+}
