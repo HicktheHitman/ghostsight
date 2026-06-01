@@ -544,9 +544,11 @@ function updateAuthUI(){
   if(curUser){
     signInBtn.style.display = "none";
     userBtn.style.display = "flex";
-    const name = curUser.user_metadata?.full_name || curUser.email?.split("@")[0] || "User";
-    document.getElementById("user-name").textContent = name.split(" ")[0];
-    document.getElementById("user-initials").textContent = name.charAt(0).toUpperCase();
+    // Use saved display name from localStorage if available, otherwise use Google name
+    const googleName = curUser.user_metadata?.full_name || curUser.email?.split("@")[0] || "User";
+    const savedName = localStorage.getItem("gs-display-name") || googleName;
+    document.getElementById("user-name").textContent = savedName.split(" ")[0];
+    document.getElementById("user-initials").textContent = savedName.charAt(0).toUpperCase();
     document.getElementById("lb-login-prompt").style.display = "none";
     checkAdminStatus();
     document.getElementById("submit-login-wall").style.display = "none";
@@ -641,6 +643,7 @@ function saveUsername(){
       document.getElementById("prof-name").textContent=val;
       document.getElementById("user-name").textContent=val.split(" ")[0];
       document.getElementById("user-initials").textContent=val.charAt(0).toUpperCase();
+      localStorage.setItem("gs-display-name", val);
       showToast("Display name updated!");
       setTimeout(()=>{const m=document.getElementById("username-msg");if(m)m.style.display="none";},3000);
     } else {
@@ -661,6 +664,7 @@ function saveUsername(){
 
 
 function signOut(){
+  localStorage.removeItem("gs-display-name");
   Object.keys(localStorage).forEach(k => {
     if(k.startsWith("sb-") || k.includes("supabase")) localStorage.removeItem(k);
   });
