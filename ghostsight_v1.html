@@ -762,51 +762,40 @@ function loadCommunitySkins(){
   xhr.send();
 }
 
-function loadVoteCountsFromDB(){
-  // Inline token lookup — getAccessToken() may not be defined yet at call time
-  let bearerToken = SUPABASE_ANON;
+async function loadVoteCountsFromDB(){
+  // Use Supabase JS client — same as loadUserVotes which works correctly
   try {
-    const raw = localStorage.getItem("sb-ofxlpxwzeirctngnlgxa-auth-token");
-    if(raw){ const p = JSON.parse(raw); if(p?.access_token) bearerToken = p.access_token; }
-  } catch(e){}
-
-  const xhr = new XMLHttpRequest();
-  // Fetch all votes — need Prefer: count header to bypass potential row limits
-  xhr.open("GET", SUPABASE_URL + "/rest/v1/votes?select=skin_id,vote_type&limit=10000", true);
-  xhr.setRequestHeader("apikey", SUPABASE_ANON);
-  xhr.setRequestHeader("Authorization", "Bearer " + bearerToken);
-  xhr.setRequestHeader("Accept", "application/json");
-  xhr.setRequestHeader("Prefer", "return=representation");
-  xhr.onload = function(){
-    if(xhr.status !== 200) {
-      console.warn("loadVoteCountsFromDB status:", xhr.status, xhr.responseText.slice(0,300));
+    const {data: voteCounts, error} = await db.from("votes").select("skin_id,vote_type");
+    if(error){
+      console.warn("loadVoteCountsFromDB error:", error.message, error.details, error.hint);
       return;
     }
-    try {
-      const voteCounts = JSON.parse(xhr.responseText);
-      console.log("loadVoteCountsFromDB got", voteCounts.length, "votes");
-      if(!voteCounts || voteCounts.length === 0) return;
-      const counts = {};
-      voteCounts.forEach(v => {
-        if(!counts[v.skin_id]) counts[v.skin_id] = {i:0,v:0};
-        if(v.vote_type==="invisible") counts[v.skin_id].i++;
-        else counts[v.skin_id].v++;
-      });
-      SKINS_DATA.forEach(s => {
-        const c = counts[s.id];
-        if(c) {
-          const total = c.i + c.v;
-          if(total > 0) s.score = Math.round(s.score * 0.7 + (c.i/total)*100 * 0.3);
-          localScores[s.id] = s.score;
-        }
-      });
-      totalVoteCount = voteCounts.length;
-      document.getElementById("sv-votes").textContent = voteCounts.length.toLocaleString();
-      let list = [...SKINS_DATA];
-      renderSkinList(list);
-    } catch(e){ console.warn("loadVoteCountsFromDB parse error:", e); }
-  };
-  xhr.send();
+    console.log("loadVoteCountsFromDB got", voteCounts.length, "votes", voteCounts.slice(0,3));
+    if(!voteCounts || voteCounts.length === 0) return;
+
+    const counts = {};
+    voteCounts.forEach(v => {
+      if(!counts[v.skin_id]) counts[v.skin_id] = {i:0,v:0};
+      if(v.vote_type==="invisible") counts[v.skin_id].i++;
+      else counts[v.skin_id].v++;
+    });
+    console.log("Vote counts by skin_id:", counts);
+
+    SKINS_DATA.forEach(s => {
+      const c = counts[s.id];
+      if(c) {
+        const total = c.i + c.v;
+        if(total > 0) s.score = Math.round(s.score * 0.7 + (c.i/total)*100 * 0.3);
+        localScores[s.id] = s.score;
+      }
+    });
+    totalVoteCount = voteCounts.length;
+    document.getElementById("sv-votes").textContent = voteCounts.length.toLocaleString();
+    let list = [...SKINS_DATA];
+    renderSkinList(list);
+  } catch(e){
+    console.warn("loadVoteCountsFromDB exception:", e);
+  }
 }
 
 async function renderLB(){
